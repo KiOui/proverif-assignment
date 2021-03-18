@@ -1,0 +1,61 @@
+private free initialDData, initialBData, initialSData.
+private free secret.
+free net.
+
+private fun pubkeypair/1.
+
+(* cryptographic constructors *)
+fun pk/1. (* derive public key from keypair *)
+fun pr/1. (* derive private key from keypair *)
+fun pone/1. (* plus one function *)
+fun enc/2. (* asymmetric encryption *)
+fun senc/2. (* symmetric encryption *)
+
+reduc dec(enc(x, pk(y)), pr(y)) = x.
+reduc sdec(senc(x, y), y) = x.
+reduc pubkey(agent) = pk(pubkeypair(agent)).
+
+let initializer = 
+    new D; new B; new S; new kDB; new passwd; new netDB; new netBS; new netDS;
+    let pkpS = pubkeypair(S) in
+        let pkpB = pubkeypair(B) in
+            out(initialDData, (D, B, S, kDB, netDB, netDS, passwd));
+            out(initialBData, (D, B, S, kDB, pkpB, pk(pkpS), netDB, netBS));
+            out(initialSData, (D, B, S, pkpS, pk(pkpB), netDS, netBS, passwd)).
+
+
+let IoTD = 
+    in(initialDData, (D, B, S, kDB, netDB, netDS, passwd));
+    new nD;
+    out(netDB, senc((D, S, nD), kDB));
+    in(netDB, msg4);
+    let (=D, =S, =pone(nD), kDS) = sdec(msg4, kDB) in
+        out(netDS, senc((D, S, passwd), kDS)).
+
+let Base = 
+    in(initialBData, (D, B, S, kDB, pkpB, pkS, netDB, netBS));
+    in(netDB, msg1);
+    let (=D, =S, nD) = sdec(msg1, kDB) in
+        out(netBS, enc((D, S, nD), pkS));
+        in(netBS, msg3);
+        let (=D, =S, =pone(nD), nS) = dec(msg3, pr(pkpB)) in
+            out(netBS, enc((D, S, pone(nS)), pkS));
+            out(netDB, senc((D, S, pone(nD), (nD, nS)), kDB)).
+
+
+let Server =
+    in(initialSData, (D, B, S, pkpS, pkB, netDS, netBS, passwd));
+    in(netBS, msg2);
+    let (=D, =S, nD) = dec(msg2, pr(pkpS)) in
+        new nS;
+        out(netBS, enc((D, S, pone(nD), nS), pkB));
+        in(netBS, msg4);
+        let (=D, =S, =pone(nS)) = dec(msg4, pr(pkpS)) in
+            in(netDS, msg6);
+            let (=D, =S, =passwd) = msg6 in
+              out(net, secret).
+
+process 
+    !initializer | !IoTD | !Base | !Server
+
+
